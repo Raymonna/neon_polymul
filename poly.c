@@ -11,8 +11,12 @@ typedef int64_t ll;
 #define Max 256
 const ll Mod = 689522689;//998244353;//689522689;//677795329;   // 模数
 const ll SpMul = 45903;//3;//34286;//45903;//34286;  // 原根
-ll twiddles[7] = { 1, 1, 1, 689522688, 88277704, 38177824, 363540571, 523078855};
+ll twiddles[7] = { 689522688, 601244985, 421426171, 167518745, 136421068, 283562815, 497758789, 298752573};
+ll inv_twiddles[7] = { 689522688, 88277704, 38177824, 325982118, 112842325, 161291536, 457305796, 220289161};
 
+static int64_t bred(int64_t a, int32_t m, uint64_t mu);
+
+uint64_t mu_big = (1UL << 32) / Mod;
 void swap(ll *a, ll *b)
 {
 	ll tmp = *a;
@@ -45,25 +49,35 @@ void Change(ll y[], int len) {
 
 void NTT(ll y[], int len, int on) {
     Change(y, len);
-    for (int h = 2, tw_i = 0; h <= len; h <<= 1) {
-        ll wn = qpow(SpMul, (Mod - 1) / h);
-		//ll wn = twiddles[tw_i++];
-		if (on == -1)wn = qpow(wn, Mod - 2);
-        for (int j = 0; j < len; j += h) {
+    /*
+	if(on == 1) {
+		printf("twiddles = { ");
+	}else{
+		printf("inv_twiddles = { ");
+	}
+	*/
+	for (int h = 2, tw_i = 0; h <= len; h <<= 1) {
+		ll wn;
+		if (on == 1) wn = twiddles[tw_i++];
+		else wn = inv_twiddles[tw_i++];
+		//if (on == -1)wn = qpow(wn, Mod - 2);
+        //printf("%ld, ", wn);
+		for (int j = 0; j < len; j += h) {
             ll w = 1LL;
             for (int k = j; k < j + h / 2; k++) {
                 ll u = y[k];
-                ll t = (w * y[k + h / 2]) % Mod;
-                y[k] = (u + t) % Mod;
-                y[k + h / 2] = (u - t + Mod) % Mod;
-                w = w * wn % Mod;
+                ll t = bred(w * y[k + h / 2], Mod, mu_big);
+                y[k] = bred((u + t), Mod, mu_big);
+                y[k + h / 2] = bred((u - t + Mod), Mod, mu_big);
+                w = bred(w * wn, Mod, mu_big);
             }
         }
     }
+	//printf("}\n");
     if (on == -1) {
         ll t = qpow(len, Mod - 2);
         for (int i = 0; i < len; i++)
-            y[i] = (y[i] * t) % Mod;
+            y[i] = bred((y[i] * t), Mod, mu_big);
     }
 }
 
@@ -114,7 +128,6 @@ void poly_Rq_mul_small(int16_t *h, const int16_t *f,const int8_t *g)
 {
 	
 	uint32_t mu = (1UL << 16) / NTRUP_Q;
-	uint64_t mu_big = (1UL << 32) / Mod;
 	//1. Initialize
 	int16_t len = 128;
 	
@@ -123,11 +136,12 @@ void poly_Rq_mul_small(int16_t *h, const int16_t *f,const int8_t *g)
 		for(int16_t i = 0; i < len; i++){
 			data1[d][i] = f[d*len + i];
 		}
-	}
+	}/*
 	for(int i = 0; i < 10; i++){
 		printf("data1[0][%d] = %ld\n", i, data1[0][i]);
 	}
-	printf("============\n");
+	*/
+	//printf("============\n");
 	memset(data1[5], 0, sizeof(data1[0]));
 	for(int16_t i = 0; i < 121; i++){
 		data1[5][i] = f[640+i];
@@ -152,15 +166,16 @@ void poly_Rq_mul_small(int16_t *h, const int16_t *f,const int8_t *g)
 	for(int16_t i = 0; i < 6; i++){
     	NTT(data2[i], len256, 1);
     }
+    /*
     for(int i = 0; i < 10; i++){
 		printf("data1[0][%d] = %ld\n", i, data1[0][i]);
 	}
-
+	*/
 	//3. element-wise product
 	for(int16_t i = 0; i < 6; i++){
 		for(int16_t j = 0; j < 6; j++){
 			for(int16_t e = 0; e < len256; e++){
-				tmp[j + 6*i][e] = (data1[i][e] * data2[j][e]) % Mod;//bred(data1[i][e] * data2[j][e] , Mod, mu_big);
+				tmp[j + 6*i][e] = bred(data1[i][e] * data2[j][e] , Mod, mu_big);//(data1[i][e] * data2[j][e]) % Mod;//bred(data1[i][e] * data2[j][e] , Mod, mu_big);
 			}
 		}
 	}
@@ -178,11 +193,11 @@ void poly_Rq_mul_small(int16_t *h, const int16_t *f,const int8_t *g)
 			}
 		}	
 	}
-	
+	/*
 	for(int i = 0; i < 10; i++){
 		printf("tmp_h[%d]= %ld\n", i, tmp_h[i]);
 	}
-	
+	*/
 	for (int i = 2 * NTRUP_P - 2; i >= NTRUP_P; i--) {
       h[i - NTRUP_P] = bred_smallm(tmp_h[i - NTRUP_P] + tmp_h[i], NTRUP_Q, mu);//(tmp_h[i - NTRUP_P] + tmp_h[i]) % NTRUP_Q;//bred_smallm(tmp_h[i - NTRUP_P] + tmp_h[i], NTRUP_Q, mu);
       h[i - NTRUP_P + 1] = (tmp_h[i - NTRUP_P + 1] + tmp_h[i]) % NTRUP_Q;//bred_smallm(tmp_h[i - NTRUP_P + 1] + tmp_h[i], NTRUP_Q, mu);
